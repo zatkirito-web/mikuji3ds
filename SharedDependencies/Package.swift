@@ -143,7 +143,10 @@ let package = Package(
         .target(name: "nihstro",
                 publicHeadersPath: "include",
                 cxxSettings: [
+                    // nihstro needs Boost headers. /opt/homebrew is where Homebrew puts them on
+                    // Apple Silicon; /usr/local is the Intel prefix the upstream package assumed.
                     .unsafeFlags([
+                        "-I/opt/homebrew/include",
                         "-I/usr/local/include"
                     ])
                 ]),

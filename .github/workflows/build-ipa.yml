@@ -33,14 +33,14 @@ jobs:
       - name: Secret scan
         run: bash tools/secret_scan.sh
 
-      - name: Install Boost headers
+      - name: Install C++ library headers
         run: |
           # The project takes its Boost headers from /opt/homebrew/include, which is where the
           # original author had them. The prebuilt iOS libraries for the two non-header-only
           # components live in Boost/ in this repository; only the headers come from here.
-          brew install boost
-          ls -d /opt/homebrew/include/boost | head
-          brew list --versions boost
+          brew install boost fmt sdl3 vulkan-headers
+          brew list --versions boost fmt sdl3 vulkan-headers
+          ls -d /opt/homebrew/include/boost /opt/homebrew/include/fmt                 /opt/homebrew/include/SDL3 /opt/homebrew/include/vulkan 2>/dev/null || true
 
       - name: Resolve Swift packages
         run: |
