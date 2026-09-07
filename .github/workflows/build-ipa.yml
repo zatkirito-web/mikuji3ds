@@ -30,20 +30,8 @@ jobs:
           echo "--- SDKs ---"
           xcodebuild -showsdks | grep -i ios || true
 
-      - name: Fail early if any key material is present
-        run: |
-          # This project must never ship Nintendo key material. Keep it out of every build.
-          if find . -path ./.git -prune -o \
-               \( -iname 'default_keys.h' -o -iname 'aes_keys.txt' -o -iname 'keys.txt' \
-                  -o -iname 'boot9*.bin' -o -iname 'seeddb.bin' -o -iname 'ctr-common-1-*' \) \
-               -print | grep -q .; then
-            echo "::error::Key material found in the repository."
-            find . -path ./.git -prune -o \
-              \( -iname 'default_keys.h' -o -iname 'aes_keys.txt' -o -iname 'keys.txt' \
-                 -o -iname 'boot9*.bin' -o -iname 'seeddb.bin' -o -iname 'ctr-common-1-*' \) -print
-            exit 1
-          fi
-          echo "No key material in the tree."
+      - name: Secret scan
+        run: bash tools/secret_scan.sh
 
       - name: Resolve Swift packages
         run: |
