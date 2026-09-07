@@ -1237,7 +1237,9 @@
 				SWIFT_VERSION = 6.0;
 				SYSTEM_HEADER_SEARCH_PATHS = (
 					/opt/homebrew/include,
+					/opt/homebrew/include/glslang,
 					/usr/local/include,
+					/usr/local/include/glslang,
 					"$(HOME)/VulkanSDK/1.4.350.1/macOS/include",
 					"$(HOME)/VulkanSDK/1.4.350.1/macOS/include/glslang",
 					"$(HOME)/VulkanSDK/1.4.350.1/macOS/include/vma",
@@ -1284,7 +1286,9 @@
 				SWIFT_VERSION = 6.0;
 				SYSTEM_HEADER_SEARCH_PATHS = (
 					/opt/homebrew/include,
+					/opt/homebrew/include/glslang,
 					/usr/local/include,
+					/usr/local/include/glslang,
 					"$(HOME)/VulkanSDK/1.4.350.1/macOS/include",
 					"$(HOME)/VulkanSDK/1.4.350.1/macOS/include/glslang",
 					"$(HOME)/VulkanSDK/1.4.350.1/macOS/include/vma",

@@ -364,6 +364,14 @@ private:
      */
     Loader::ResultStatus SetupCrypto();
 
+    /**
+     * Some dumps leave the "encrypted" flag set on content that has already been decrypted. For a
+     * container with an extended header that is caught by comparing the jump id with the program
+     * id; this covers the containers that have no extended header, by looking at a structure whose
+     * plaintext form is known.
+     */
+    bool LooksAlreadyDecrypted(int block_size);
+
     std::unique_ptr<FileUtil::IOFile> Reopen(const std::unique_ptr<FileUtil::IOFile>& orig_file,
                                              const std::string& new_filename = "");
 

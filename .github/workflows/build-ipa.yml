@@ -33,14 +33,22 @@ jobs:
       - name: Secret scan
         run: bash tools/secret_scan.sh
 
-      - name: Install C++ library headers
+      - name: Install headers the project expects to find on the machine
         run: |
           # The project takes its Boost headers from /opt/homebrew/include, which is where the
           # original author had them. The prebuilt iOS libraries for the two non-header-only
           # components live in Boost/ in this repository; only the headers come from here.
-          brew install boost fmt sdl3 vulkan-headers
-          brew list --versions boost fmt sdl3 vulkan-headers
-          ls -d /opt/homebrew/include/boost /opt/homebrew/include/fmt                 /opt/homebrew/include/SDL3 /opt/homebrew/include/vulkan 2>/dev/null || true
+          # Headers only. The project expects Boost from a Homebrew prefix and Vulkan, VMA and
+          # glslang from a Vulkan SDK installed in the author's home directory; neither exists on
+          # a runner. Everything else (fmt, SDL3, teakra, dynarmic, glslang's libraries, ...)
+          # arrives as a prebuilt xcframework through SharedDependencies, so those are
+          # deliberately NOT installed here: a Homebrew copy on the header search path would
+          # shadow them and link against a different ABI.
+          brew install boost vulkan-headers vulkan-memory-allocator glslang
+          brew list --versions boost vulkan-headers vulkan-memory-allocator glslang
+          ls -d /opt/homebrew/include/boost /opt/homebrew/include/vulkan \
+                /opt/homebrew/include/glslang
+          ls /opt/homebrew/include/vk_mem_alloc.h
 
       - name: Resolve Swift packages
         run: |

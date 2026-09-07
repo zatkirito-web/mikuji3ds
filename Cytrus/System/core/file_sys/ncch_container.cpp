@@ -294,6 +294,38 @@ Loader::ResultStatus NCCHContainer::SetupCrypto() {
     return Loader::ResultStatus::Success;
 }
 
+bool NCCHContainer::LooksAlreadyDecrypted(int block_size) {
+    if (!file || !file->IsOpen()) {
+        return false;
+    }
+
+    // A RomFS always begins with an IVFC header.
+    if (ncch_header.romfs_size) {
+        std::array<u8, 4> magic{};
+        file->Seek(ncch_offset + ncch_header.romfs_offset * block_size, SEEK_SET);
+        if (file->ReadBytes(magic.data(), magic.size()) == magic.size() &&
+            magic == std::array<u8, 4>{'I', 'V', 'F', 'C'}) {
+            return true;
+        }
+    }
+
+    // An ExeFS section table starts with one of a small set of known section names.
+    if (ncch_header.exefs_size) {
+        ExeFs_Header header{};
+        file->Seek(ncch_offset + ncch_header.exefs_offset * block_size, SEEK_SET);
+        if (file->ReadBytes(&header, sizeof(header)) == sizeof(header)) {
+            for (const char* known : {".code", ".text", "icon", "banner", "logo"}) {
+                if (std::strncmp(header.section[0].name, known,
+                                 sizeof(header.section[0].name)) == 0) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
 Loader::ResultStatus NCCHContainer::LoadHeader() {
     if (has_header) {
         return Loader::ResultStatus::Success;
@@ -534,8 +566,16 @@ Loader::ResultStatus NCCHContainer::Load() {
             has_exheader = true;
         }
 
-        // A title without an extended header never reaches the check above, so stop here rather
-        // than handing the emulator a buffer full of undecrypted bytes.
+        // A container without an extended header never reaches the check above, so look at the
+        // content itself before deciding it cannot be read.
+        if (is_encrypted && !has_exheader && LooksAlreadyDecrypted(block_size)) {
+            LOG_WARNING(Service_FS, "NCCH is marked as encrypted but its contents are not. "
+                                    "Force no crypto scheme.");
+            is_encrypted = false;
+            crypto_failed = false;
+        }
+
+        // Stop rather than handing the emulator a buffer full of bytes we could not decrypt.
         if (is_encrypted && crypto_failed) {
             return Loader::ResultStatus::ErrorEncrypted;
         }
