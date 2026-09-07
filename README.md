@@ -42,10 +42,22 @@ by importing it through the Files app. It is stored at:
 
 Titles that use seed crypto also need `seeddb.bin` from the same dump, in the same directory.
 
-Note that GodMode9's stock DumpKeys script does not emit `generatorConstant`, without which no
-normal key can be derived from a KeyX/KeyY pair. If the key file does not contain it, the emulator
-tries to solve for it using a slot for which the file supplies KeyX, KeyY and the resulting normal
-key, and reports a specific error if it cannot.
+### The key generator constant
+
+Deriving a usable key from a KeyX/KeyY pair needs a hardware constant that the 3DS AES engine
+applies. No console dumping script writes it: Citra's DumpKeys and the Azahar fork's version both
+read their values out of `boot9.bin`, which does not contain it. Old Citra hardcoded it in source
+instead, which is why key files dumped for Citra never list it.
+
+This fork will not hardcode it. Instead:
+
+- If the key file contains `generatorConstant=`, it is used.
+- Otherwise the emulator solves for it, using any key slot for which the file supplies KeyX, KeyY
+  and the resulting normal key. No stock dump provides such a slot, so this rarely fires.
+- Otherwise the title does not load and the app says exactly that, rather than producing garbage.
+
+`tools/check_aes_keys.py` reports which of these applies for a given key file without printing any
+key values.
 
 ## Building
 

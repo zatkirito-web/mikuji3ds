@@ -303,6 +303,14 @@ int32_t cytrus::insert_disc(std::string path) {
             last_load_error_text =
                 "This title is encrypted and no key file has been imported. Import the "
                 "aes_keys.txt you dumped from your own console.";
+        } else if (missing == "generatorConstant") {
+            // Worth its own message: no console dumping tool writes this value, so a key file
+            // that is otherwise complete still lands here.
+            last_load_error_text =
+                "Your key file has the NCCH keys but not the key generator constant, which is "
+                "needed to turn a KeyX and KeyY into a usable key. No dumping script writes it "
+                "and it could not be solved for from the keys in your file. Add a line reading "
+                "generatorConstant=<value> to aes_keys.txt and import it again.";
         } else if (!missing.empty()) {
             last_load_error_text =
                 "This title is encrypted and these keys are missing from your key file: " + missing;

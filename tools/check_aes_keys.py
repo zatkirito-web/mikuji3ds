@@ -118,8 +118,14 @@ def main():
             missing.remove("generatorConstant")
         else:
             print("generatorConstant is absent and cannot be solved for: no slot in this file has")
-            print("KeyX, KeyY and KeyN together. GodMode9's stock DumpKeys script does not write")
-            print("this value. Without it no title can be decrypted.")
+            print("KeyX, KeyY and KeyN together.")
+            print()
+            print("No console dumping script writes this value. Citra's DumpKeys and the Azahar")
+            print("fork's version both read everything from boot9.bin, which does not contain it,")
+            print("and neither emits it. Old Citra had it hardcoded in its source instead, which")
+            print("is why key files dumped for Citra never include it.")
+            print()
+            print("Add a line of the form  generatorConstant=<32 hex digits>  to this file.")
 
     print()
     if missing:
