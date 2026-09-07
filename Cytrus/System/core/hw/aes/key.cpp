@@ -171,12 +171,11 @@ std::string NormalizeKeyLine(std::string line) {
         static_cast<u8>(line[2]) == 0xBF) {
         line.erase(0, 3);
     }
-    const std::size_t first = line.find_first_not_of(" 	");
+    const std::size_t first = line.find_first_not_of(" \t");
     if (first == std::string::npos) {
         return {};
     }
-    const std::size_t last = line.find_last_not_of(" 	
-");
+    const std::size_t last = line.find_last_not_of(" \t\r\n");
     return line.substr(first, last - first + 1);
 }
 
@@ -450,8 +449,7 @@ void LoadKeysFile() {
     // ignores everything until it sees one. A legacy file has no markers at all, so without this
     // it would be skipped in its entirety without a single error being reported.
     bool has_section_marker = false;
-    for (const auto& raw_line : Common::SplitString(contents, '
-')) {
+    for (const auto& raw_line : Common::SplitString(contents, '\n')) {
         const std::string line = NormalizeKeyLine(raw_line);
         if (line.starts_with(":")) {
             has_section_marker = true;
@@ -461,8 +459,7 @@ void LoadKeysFile() {
 
     if (!has_section_marker) {
         key_load_report.legacy_format = true;
-        contents.insert(0, ":AES
-");
+        contents.insert(0, ":AES\n");
     }
 
     cached_keys_data = std::move(contents);

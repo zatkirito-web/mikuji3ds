@@ -80,6 +80,9 @@
 
 // Sys files
 #define SHARED_FONT "shared_font.bin"
+// The file name GodMode9's DumpKeys script produces. Accepted alongside KEYS_FILE so a key
+// file dumped for Citra can be imported unchanged.
+#define AES_KEYS "aes_keys.txt"
 #define KEYS_FILE "keys.txt"
 #define BOOTROM9 "boot9.bin"
 #define SECRET_SECTOR "sector0x96.bin"
