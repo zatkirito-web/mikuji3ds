@@ -1,0 +1,102 @@
+name: build-ipa
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: iPadOS arm64 (unsigned)
+    runs-on: macos-latest
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pick the newest Xcode on the runner
+        run: |
+          echo "Installed Xcodes:"
+          ls -d /Applications/Xcode*.app
+          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Selecting $LATEST"
+          sudo xcode-select -s "$LATEST"
+          xcodebuild -version
+          echo "--- SDKs ---"
+          xcodebuild -showsdks | grep -i ios || true
+
+      - name: Fail early if any key material is present
+        run: |
+          # This project must never ship Nintendo key material. Keep it out of every build.
+          if find . -path ./.git -prune -o \
+               \( -iname 'default_keys.h' -o -iname 'aes_keys.txt' -o -iname 'keys.txt' \
+                  -o -iname 'boot9*.bin' -o -iname 'seeddb.bin' -o -iname 'ctr-common-1-*' \) \
+               -print | grep -q .; then
+            echo "::error::Key material found in the repository."
+            find . -path ./.git -prune -o \
+              \( -iname 'default_keys.h' -o -iname 'aes_keys.txt' -o -iname 'keys.txt' \
+                 -o -iname 'boot9*.bin' -o -iname 'seeddb.bin' -o -iname 'ctr-common-1-*' \) -print
+            exit 1
+          fi
+          echo "No key material in the tree."
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Folium.xcodeproj \
+            -scheme Folium
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Folium.xcodeproj \
+            -scheme Folium \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            2>&1 | tee build.log
+
+      - name: Package unsigned IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::No .app was produced"
+            exit 1
+          fi
+          echo "Packaging $APP"
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          # SideStore and AltStore re-sign the payload themselves, so an unsigned IPA is enough.
+          zip -qry Mikuji3DS-unsigned.ipa Payload
+          ls -lh Mikuji3DS-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mikuji3DS-unsigned-ipa
+          path: Mikuji3DS-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn

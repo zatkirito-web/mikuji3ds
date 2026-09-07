@@ -1,0 +1,35 @@
+# Build output
+build/
+DerivedData/
+*.ipa
+Payload/
+build.log
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+.build/
+
+# macOS
+.DS_Store
+
+# Key material must never be committed. These are the file names the emulator reads.
+aes_keys.txt
+keys.txt
+boot9.bin
+boot9_prot.bin
+seeddb.bin
+sector0x96.bin
+default_keys.h
+ctr-common-1-cert.*
+ctr-common-1-key.*
+
+# ROMs
+*.3ds
+*.cci
+*.cxi
+*.cia
