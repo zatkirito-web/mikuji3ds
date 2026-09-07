@@ -28,6 +28,19 @@ only. This fork restores the ability to load encrypted ones using keys the user 
 4. **Missing keys are reported, not guessed at.** A title that cannot be decrypted names the keys
    that are missing instead of failing silently or producing garbage.
 
+## Getting files in and out
+
+Everything the emulator needs is imported through the Files app, from any provider the picker
+offers (On My iPad, iCloud Drive, Google Drive, Dropbox). A USB connection to a computer is never
+required to use the emulator.
+
+- **ROMs** — the `+` button, "Game". The file is copied into the app's own storage, so once a ROM
+  has been imported it plays with no network and no computer attached.
+- **Keys** — the `+` button, "System File". `aes_keys.txt` and `seeddb.bin` keep their names and
+  land in the Citra-compatible `sysdata` directory the core reads.
+- **Save data** — the `+` button, "Export Save Data" writes the virtual SD card out to a folder you
+  choose; "Import Save Data" merges a folder back in.
+
 ## Keys and ROMs
 
 This repository contains no ROMs, no AES keys, no Nintendo private keys, and no code that

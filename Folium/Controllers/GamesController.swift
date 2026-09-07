@@ -30,6 +30,9 @@ class GamesController : UICollectionViewController {
     var importFileType: ImportFileType = .game
     // Summary of the last key import, shown to the user once the picker closes.
     var importReport: String? = nil
+    // The export picker uses the same delegate; without this the callback would try to import the
+    // destination the user just chose.
+    var isExportingSaveData: Bool = false
     
     var hostingOrJoiningState: HostingOrJoiningState = .disconnected
     var selectedSnapshot: SelectedSnapshot = .cherry {
@@ -154,8 +157,13 @@ class GamesController : UICollectionViewController {
                             documentPickerController.delegate = self
                             self.present(documentPickerController, animated: true)
                         },
-                        UIAction(title: "System File", image: UIImage(systemName: "document"), attributes: .disabled) { action in
+                        UIAction(title: "System File", image: UIImage(systemName: "document")) { action in
                             self.importFileType = .systemFile
+                            self.isExportingSaveData = false
+                            // The file keeps its own name, so aes_keys.txt and seeddb.bin land
+                            // where the core looks for them.
+                            self.currentlyImportingSystemFile = nil
+
                             var types: [UTType] = []
                             switch self.selectedSnapshot {
                             case .grape,
@@ -165,11 +173,45 @@ class GamesController : UICollectionViewController {
                                     types.append(bin)
                                 }
                             default:
-                                break
+                                // A key file has no type the system recognises, so allow anything
+                                // rather than greying every file out.
+                                types.append(.item)
                             }
-                            
+
                             let documentPickerController: UIDocumentPickerViewController = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
-                            documentPickerController.allowsMultipleSelection = [.grape, .mandarine, .tomato].contains(self.selectedSnapshot)
+                            documentPickerController.allowsMultipleSelection = true
+                            documentPickerController.delegate = self
+                            self.present(documentPickerController, animated: true)
+                        },
+                        UIAction(title: "Import Save Data", image: UIImage(systemName: "square.and.arrow.down")) { action in
+                            self.importFileType = .saveData
+                            self.isExportingSaveData = false
+
+                            let documentPickerController: UIDocumentPickerViewController = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: true)
+                            documentPickerController.delegate = self
+                            self.present(documentPickerController, animated: true)
+                        },
+                        UIAction(title: "Export Save Data", image: UIImage(systemName: "square.and.arrow.up")) { action in
+                            guard let documentDirectoryURL: URL = .documentDirectoryURL else {
+                                return
+                            }
+
+                            let saveDataURL: URL = documentDirectoryURL
+                                .appending(component: self.selectedSnapshot.string)
+                                .appending(component: "sdmc")
+
+                            guard FileManager.default.fileExists(atPath: saveDataURL.path) else {
+                                let alertController: UIAlertController = UIAlertController(
+                                    title: "No Save Data",
+                                    message: "Nothing has been saved for this system yet.",
+                                    preferredStyle: .alert)
+                                alertController.addAction(UIAlertAction(title: "OK", style: .default))
+                                self.present(alertController, animated: true)
+                                return
+                            }
+
+                            self.isExportingSaveData = true
+                            let documentPickerController: UIDocumentPickerViewController = UIDocumentPickerViewController(forExporting: [saveDataURL], asCopy: true)
                             documentPickerController.delegate = self
                             self.present(documentPickerController, animated: true)
                         }
@@ -865,6 +907,13 @@ extension GamesController : UIDocumentPickerDelegate, UINavigationControllerDele
     }
     
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        if isExportingSaveData {
+            // An export is finished the moment the picker returns; the system did the copying.
+            isExportingSaveData = false
+            controller.dismiss(animated: true)
+            return
+        }
+
         guard let documentDirectoryURL: URL = .documentDirectoryURL else {
             return
         }
@@ -886,6 +935,23 @@ extension GamesController : UIDocumentPickerDelegate, UINavigationControllerDele
 
         var failures: [String] = []
 
+        if importFileType == .saveData {
+            for url in urls {
+                do {
+                    try FileManager.default.createDirectory(at: gamesDirectoryURL,
+                                                            withIntermediateDirectories: true)
+                    try merge(contentsOf: url, into: gamesDirectoryURL)
+                    importReport = "Save data imported."
+                } catch {
+                    print(error, error.localizedDescription)
+                    failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+
+            finishImport(controller, failures: failures)
+            return
+        }
+
         for url in urls {
             let toURL: URL = if importFileType == .game {
                 gamesDirectoryURL.appending(component: url.lastPathComponent)
@@ -903,7 +969,13 @@ extension GamesController : UIDocumentPickerDelegate, UINavigationControllerDele
                     try FileManager.default.removeItem(at: toURL)
                 }
 
-                try FileManager.default.copyItem(at: url, to: toURL)
+                // asCopy: true hands us a file inside this app's own container, so a move is a
+                // rename and costs nothing. A 4GB ROM would otherwise be written twice.
+                do {
+                    try FileManager.default.moveItem(at: url, to: toURL)
+                } catch {
+                    try FileManager.default.copyItem(at: url, to: toURL)
+                }
 
                 if let currentlyImportingSystemFile: String, let tabController: TabController = tabBarController as? TabController {
                     tabController.directoryManager.unavailableSystemFiles.removeAll(where: { systemFile in
@@ -924,6 +996,36 @@ extension GamesController : UIDocumentPickerDelegate, UINavigationControllerDele
             }
         }
         
+        finishImport(controller, failures: failures)
+    }
+
+    /// Copies everything inside `source` into `destination`, replacing files that already exist
+    /// and merging directories rather than replacing them wholesale.
+    func merge(contentsOf source: URL, into destination: URL) throws {
+        let fileManager: FileManager = .default
+
+        for name in try fileManager.contentsOfDirectory(atPath: source.path) {
+            let from: URL = source.appending(component: name)
+            let to: URL = destination.appending(component: name)
+
+            var isDirectory: ObjCBool = false
+            fileManager.fileExists(atPath: from.path, isDirectory: &isDirectory)
+
+            if isDirectory.boolValue {
+                if !fileManager.fileExists(atPath: to.path) {
+                    try fileManager.createDirectory(at: to, withIntermediateDirectories: true)
+                }
+                try merge(contentsOf: from, into: to)
+            } else {
+                if fileManager.fileExists(atPath: to.path) {
+                    try fileManager.removeItem(at: to)
+                }
+                try fileManager.copyItem(at: from, to: to)
+            }
+        }
+    }
+
+    func finishImport(_ controller: UIDocumentPickerViewController, failures: [String]) {
         let message: String? = if !failures.isEmpty {
             failures.joined(separator: "\n")
         } else {
