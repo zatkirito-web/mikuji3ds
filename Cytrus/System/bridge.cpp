@@ -15,6 +15,7 @@
 #include "core/hle/service/am/am.h"
 #include "core/loader/loader.h"
 #include "core/loader/smdh.h"
+#include "core/hw/aes/key.h"
 #include "network/network.h"
 
 #include <dlfcn.h>
@@ -201,7 +202,68 @@ void* cytrus::icon_from_disc(std::string path) {
 }
 
 
-void cytrus::insert_disc(std::string path) {
+namespace {
+// Storage for the strings handed back to Swift. Each is valid until the next call, which is all
+// the frontend needs since it copies them straight into a Swift String.
+std::string last_load_error_text;
+std::string key_report_text;
+std::string missing_keys_text;
+
+std::string JoinMissingKeys() {
+    std::string joined;
+    for (const auto& name : HW::AES::GetMissingNCCHKeyNames()) {
+        if (!joined.empty()) {
+            joined += ", ";
+        }
+        joined += name;
+    }
+    return joined;
+}
+} // namespace
+
+const char* cytrus::last_load_error(void) {
+    return last_load_error_text.c_str();
+}
+
+const char* cytrus::missing_keys(void) {
+    missing_keys_text = JoinMissingKeys();
+    return missing_keys_text.c_str();
+}
+
+bool cytrus::keys_ready(void) {
+    return HW::AES::GetKeyLoadReport().file_found && JoinMissingKeys().empty();
+}
+
+const char* cytrus::reload_keys(void) {
+    // force = true so that a key file imported while the app is running replaces what was read
+    // at startup.
+    HW::AES::InitKeys(true);
+
+    const auto& report = HW::AES::GetKeyLoadReport();
+    if (!report.file_found) {
+        key_report_text = "No key file found. Import the aes_keys.txt you dumped from your own "
+                          "console.";
+        return key_report_text.c_str();
+    }
+
+    const std::string missing = JoinMissingKeys();
+    key_report_text = report.file_name + ": " +
+                      std::to_string(report.entries_seen - report.parse_errors) + " keys read";
+    if (report.parse_errors > 0) {
+        key_report_text += ", " + std::to_string(report.parse_errors) + " lines failed to parse";
+    }
+    key_report_text += report.legacy_format ? " (legacy Citra layout)" : " (sectioned layout)";
+    if (report.generator_constant_derived) {
+        key_report_text += ". The generator constant was solved for from your own keys";
+    }
+    if (!missing.empty()) {
+        key_report_text += ". Missing for encrypted titles: " + missing;
+    }
+
+    return key_report_text.c_str();
+}
+
+int32_t cytrus::insert_disc(std::string path) {
     Core::System& system{Core::System::GetInstance()};
     
     cntnr.window.release();
@@ -229,7 +291,31 @@ void cytrus::insert_disc(std::string path) {
     InputManager::Init();
     Network::Init();
     
-    void(system.Load(*cntnr.window, path, cntnr.secondary_window.get()));
+    const auto result = system.Load(*cntnr.window, path, cntnr.secondary_window.get());
+    if (result == Core::System::ResultStatus::Success) {
+        last_load_error_text.clear();
+        return 0;
+    }
+
+    if (result == Core::System::ResultStatus::ErrorLoader_ErrorEncrypted) {
+        const std::string missing = JoinMissingKeys();
+        if (!HW::AES::GetKeyLoadReport().file_found) {
+            last_load_error_text =
+                "This title is encrypted and no key file has been imported. Import the "
+                "aes_keys.txt you dumped from your own console.";
+        } else if (!missing.empty()) {
+            last_load_error_text =
+                "This title is encrypted and these keys are missing from your key file: " + missing;
+        } else {
+            last_load_error_text = "This title is encrypted and could not be decrypted with the "
+                                   "keys that were imported.";
+        }
+        return 1;
+    }
+
+    last_load_error_text =
+        "The title could not be loaded (error " + std::to_string(static_cast<int>(result)) + ").";
+    return 2;
 }
 
 

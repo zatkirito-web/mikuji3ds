@@ -15,7 +15,23 @@ void initialize_logging(void);
 
 void* icon_from_disc(std::string);
 
-void insert_disc(std::string);
+// 0 on success. Anything else means the title was not loaded; call last_load_error for text
+// that can be shown to the user.
+int32_t insert_disc(std::string);
+
+// Why the last insert_disc call failed. Valid until the next call. Never null.
+const char* last_load_error(void);
+
+// Re-reads the key file the user imported and returns a one line summary of what was read.
+// Valid until the next call. Never null.
+const char* reload_keys(void);
+
+// Comma separated names of the keys needed for encrypted titles that the key file does not
+// supply. Empty when nothing is missing. Valid until the next call. Never null.
+const char* missing_keys(void);
+
+// True when a key file was found and everything needed to decrypt encrypted titles is present.
+bool keys_ready(void);
 
 bool is_paused(bool = false, bool = false);
 bool is_running(bool = false, bool = false);

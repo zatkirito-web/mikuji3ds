@@ -11,12 +11,13 @@ enum ImportFileType {
     case game,
          systemFile
     
-    var directory: String {
+    func directory(for system: System) -> String {
         switch self {
         case .game:
             "games"
         case .systemFile:
-            "system_data"
+            // Cytrus keeps its keys where the 3DS core looks for them.
+            system == .cytrus ? "sysdata" : "system_data"
         }
     }
 }

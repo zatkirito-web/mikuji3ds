@@ -365,10 +365,30 @@ class CytrusController : ControlsController {
                     }
                 }
                 
-                await cytrusGame.cytrusSystem.insertDisc(at: cytrusGame.details.url)
-                
+                let loadResult: CytrusLoadResult = await cytrusGame.cytrusSystem
+                    .insertDisc(at: cytrusGame.details.url)
+
+                if case let .failure(message) = loadResult {
+                    // Missing keys are the expected reason to get here, so say which ones rather
+                    // than dropping the user into a black screen.
+                    await MainActor.run {
+                        let alertController: UIAlertController = UIAlertController(
+                            title: "Unable to Start",
+                            message: message,
+                            preferredStyle: .alert)
+                        alertController.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                            if let tabController: TabController = self.tabBarController as? TabController {
+                                tabController.game = nil
+                            }
+                            self.dismiss(animated: true)
+                        })
+                        self.present(alertController, animated: true)
+                    }
+                    return
+                }
+
                 await cytrusGame.cytrusSystem.set(change: true, isRunning: true)
-                
+
                 await cytrusGame.cytrusSystem.start()
             }
         }

@@ -15,6 +15,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
+import Cytrus
+
 import Tomato
 
 enum HostingOrJoiningState {
@@ -26,6 +28,8 @@ enum HostingOrJoiningState {
 class GamesController : UICollectionViewController {
     var currentlyImportingSystemFile: String? = nil
     var importFileType: ImportFileType = .game
+    // Summary of the last key import, shown to the user once the picker closes.
+    var importReport: String? = nil
     
     var hostingOrJoiningState: HostingOrJoiningState = .disconnected
     var selectedSnapshot: SelectedSnapshot = .cherry {
@@ -878,29 +882,65 @@ extension GamesController : UIDocumentPickerDelegate, UINavigationControllerDele
             break
         }
         
-        gamesDirectoryURL.append(component: importFileType.directory)
-        
+        gamesDirectoryURL.append(component: importFileType.directory(for: selectedSnapshot))
+
+        var failures: [String] = []
+
         for url in urls {
             let toURL: URL = if importFileType == .game {
                 gamesDirectoryURL.appending(component: url.lastPathComponent)
             } else {
                 gamesDirectoryURL.appending(component: currentlyImportingSystemFile ?? url.lastPathComponent)
             }
-            
+
             do {
+                try FileManager.default.createDirectory(at: gamesDirectoryURL,
+                                                        withIntermediateDirectories: true)
+
+                // copyItem throws if the destination exists, which used to make re-importing a key
+                // file fail silently.
+                if FileManager.default.fileExists(atPath: toURL.path) {
+                    try FileManager.default.removeItem(at: toURL)
+                }
+
                 try FileManager.default.copyItem(at: url, to: toURL)
-                
+
                 if let currentlyImportingSystemFile: String, let tabController: TabController = tabBarController as? TabController {
                     tabController.directoryManager.unavailableSystemFiles.removeAll(where: { systemFile in
                         selectedSnapshot.valid && systemFile.title == currentlyImportingSystemFile
                     })
                 }
+
+                if importFileType == .systemFile, selectedSnapshot == .cytrus {
+                    // Re-read the keys so an import takes effect without restarting the app, and
+                    // report what was actually read.
+                    let report: String = CytrusKeys.reload()
+                    print("Cytrus keys: \(report)")
+                    importReport = report
+                }
             } catch {
                 print(error, error.localizedDescription)
+                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
             }
         }
         
+        let message: String? = if !failures.isEmpty {
+            failures.joined(separator: "\n")
+        } else {
+            importReport
+        }
+        importReport = nil
+
         controller.dismiss(animated: true) {
+            if let message: String {
+                let alertController: UIAlertController = UIAlertController(
+                    title: failures.isEmpty ? "Import Finished" : "Import Failed",
+                    message: message,
+                    preferredStyle: .alert)
+                alertController.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alertController, animated: true)
+            }
+
             Task {
                 await self.populateGames()
             }

@@ -45,6 +45,32 @@ public struct SendableBoxart : @unchecked Sendable {
     public let data: NSData
 }
 
+public enum CytrusLoadResult : Sendable, Equatable {
+    case success
+    /// The title was not loaded. The string is a message that can be shown to the user as is.
+    case failure(String)
+}
+
+/// Access to the user-provided key file. Keys are never bundled with the app and are never
+/// downloaded: importing a file through the Files app is the only way one gets here.
+public enum CytrusKeys {
+    /// Re-reads the key file and returns a one line summary of what was read.
+    @discardableResult
+    public static func reload() -> String {
+        String(cString: cytrus.reload_keys())
+    }
+
+    /// True when a key file was found and everything needed for encrypted titles is present.
+    public static var ready: Bool {
+        cytrus.keys_ready()
+    }
+
+    /// Names of the keys that encrypted titles need but the key file does not supply.
+    public static var missing: String {
+        String(cString: cytrus.missing_keys())
+    }
+}
+
 public actor CytrusSystem {
     private var fileManager: FileManager = .default
     
@@ -58,8 +84,13 @@ public actor CytrusSystem {
         cytrus.initialize_logging()
     }
     
-    public func insertDisc(at url: URL) {
-        cytrus.insert_disc(std.string(url.path))
+    @discardableResult
+    public func insertDisc(at url: URL) -> CytrusLoadResult {
+        if cytrus.insert_disc(std.string(url.path)) == 0 {
+            return .success
+        }
+
+        return .failure(String(cString: cytrus.last_load_error()))
     }
     
     public func set(change: Bool = false, isRunning: Bool = false) {

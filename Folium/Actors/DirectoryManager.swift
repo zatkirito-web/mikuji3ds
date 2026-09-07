@@ -42,11 +42,18 @@ actor DirectoryManager {
                 "save_states": [:],
                 "sdmc": [:],
                 "shaders": [:],
-                "system_data": [
-                    "aes_keys.txt" : SystemFile(path: "system_data",
+                // The 3DS core reads its keys from "sysdata", the same directory name Citra and
+                // Azahar use. The app used to call this folder "system_data", which meant a key
+                // file imported through the UI was written somewhere the core never looked.
+                "sysdata": [
+                    "aes_keys.txt" : SystemFile(path: "sysdata",
                                                 system: .cytrus,
                                                 systemFileType: .required,
-                                                title: "aes_keys.txt")
+                                                title: "aes_keys.txt"),
+                    "seeddb.bin" : SystemFile(path: "sysdata",
+                                              system: .cytrus,
+                                              systemFileType: .optional,
+                                              title: "seeddb.bin")
                 ]
             ],
             .grape : [
@@ -122,7 +129,7 @@ actor DirectoryManager {
         for system in await SystemNames.array {
             let systemDirectoryURL: URL = documentDirectoryURL.appending(component: await system.string)
             try createDirectoryIfNeeded(from: systemDirectoryURL)
-            try fixSubfolders(for: systemDirectoryURL)
+            try fixSubfolders(for: systemDirectoryURL, system: system)
             
             if let subfoldersForSystem: [String : [String : SystemFile]] = subfoldersForSystems[system] {
                 try loop(subfolders: subfoldersForSystem, for: systemDirectoryURL) { subfolderName in
@@ -139,19 +146,46 @@ actor DirectoryManager {
         }
     }
     
-    private func fixSubfolders(for systemDirectoryURL: URL) throws {
-        let replacementSubfolderNames: [String : String] = [
+    private func fixSubfolders(for systemDirectoryURL: URL, system: System) throws {
+        var replacementSubfolderNames: [String : String] = [
             "memcards" : "memory_cards",
             "roms" : "games",
             "states" : "save_states",
             "sysdata" : "system_data"
         ]
-        
+
+        // The 3DS core hardcodes "sysdata", so for Cytrus the migration runs the other way. Without
+        // this the core would create "sysdata" itself and the next launch would try to rename it
+        // onto the existing "system_data" and throw, taking the whole setup down with it.
+        if system == .cytrus {
+            replacementSubfolderNames["sysdata"] = nil
+            replacementSubfolderNames["system_data"] = "sysdata"
+        }
+
         for (key, value) in replacementSubfolderNames {
             let oldDirectoryURL: URL = systemDirectoryURL.appending(component: key)
-            if fileManager.fileExists(atPath: oldDirectoryURL.path) {
-                try fileManager.moveItem(at: oldDirectoryURL, to: systemDirectoryURL
-                    .appending(component: value))
+            let newDirectoryURL: URL = systemDirectoryURL.appending(component: value)
+            guard fileManager.fileExists(atPath: oldDirectoryURL.path) else {
+                continue
+            }
+
+            if !fileManager.fileExists(atPath: newDirectoryURL.path) {
+                try fileManager.moveItem(at: oldDirectoryURL, to: newDirectoryURL)
+                continue
+            }
+
+            // Both exist, so move the files across one by one and drop the old directory once it
+            // has nothing left in it.
+            for name in try fileManager.contentsOfDirectory(atPath: oldDirectoryURL.path) {
+                let source: URL = oldDirectoryURL.appending(component: name)
+                let destination: URL = newDirectoryURL.appending(component: name)
+                if !fileManager.fileExists(atPath: destination.path) {
+                    try fileManager.moveItem(at: source, to: destination)
+                }
+            }
+
+            if try fileManager.contentsOfDirectory(atPath: oldDirectoryURL.path).isEmpty {
+                try fileManager.removeItem(at: oldDirectoryURL)
             }
         }
     }
