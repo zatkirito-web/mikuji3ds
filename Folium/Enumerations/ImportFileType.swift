@@ -11,7 +11,7 @@ enum ImportFileType {
     case game,
          systemFile
     
-    func directory(for system: System) -> String {
+    func directory(for system: System?) -> String {
         switch self {
         case .game:
             "games"

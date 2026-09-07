@@ -882,7 +882,7 @@ extension GamesController : UIDocumentPickerDelegate, UINavigationControllerDele
             break
         }
         
-        gamesDirectoryURL.append(component: importFileType.directory(for: selectedSnapshot))
+        gamesDirectoryURL.append(component: importFileType.directory(for: selectedSnapshot.system))
 
         var failures: [String] = []
 
