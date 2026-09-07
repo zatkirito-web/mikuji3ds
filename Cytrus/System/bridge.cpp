@@ -18,6 +18,8 @@
 #include "core/hw/aes/key.h"
 #include "network/network.h"
 
+#include <string>
+
 #include <dlfcn.h>
 #include <Metal.hpp>
 #define SDL_MAIN_HANDLED

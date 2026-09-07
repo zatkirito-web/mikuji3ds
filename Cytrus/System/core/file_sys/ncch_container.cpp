@@ -268,7 +268,7 @@ Loader::ResultStatus NCCHContainer::SetupCrypto() {
         std::copy(offset_exefs.begin(), offset_exefs.end(), exefs_ctr.begin() + 12);
         std::copy(offset_romfs.begin(), offset_romfs.end(), romfs_ctr.begin() + 12);
     } else {
-        LOG_ERROR(Service_FS, "Unknown NCCH version {}", ncch_header.version);
+        LOG_ERROR(Service_FS, "Unknown NCCH version {}", static_cast<u32>(ncch_header.version));
         crypto_failed = true;
     }
 
